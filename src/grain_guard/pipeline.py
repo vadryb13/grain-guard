@@ -14,7 +14,6 @@ from grain_guard.models import ModelBundle, get_backend
 from grain_guard.models.train import split_by_group
 from grain_guard.physics.model import compute_alerts
 from grain_guard.reports import economics
-from grain_guard.synth.generator import SynthConfig, generate, validate
 
 
 @dataclass
@@ -29,19 +28,17 @@ class PipelineResult:
 
 
 def run(
-    n_silos: int = 1000,
-    seed: int = 42,
+    df: pd.DataFrame,
     test_size: float = 0.3,
+    seed: int = 42,
     out_dir: str | Path | None = None,
     write_reports: bool = True,
-    df: pd.DataFrame | None = None,
 ) -> PipelineResult:
-    """Полный прогон. Если передан df (данные реального объекта), синтетика
-    пропускается; при отсутствии положительной разметки ML не обучается
-    и отчёт формируется по физической модели."""
-    if df is None:
-        df = generate(SynthConfig(n_silos=n_silos, seed=seed))
-        validate(df)
+    """Полный прогон на реальных данных (после adapters.ingest_csv).
+
+    При отсутствии положительной разметки ML не обучается, отчёт
+    формируется по физической модели.
+    """
     df = df.sort_values(["silo_id", "timestamp"]).reset_index(drop=True)
 
     phys = compute_alerts(df)

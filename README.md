@@ -2,6 +2,8 @@
 
 Прогноз самосогревания зерна за **72 часа**: физическая модель + ML, MVP для пилота на элеваторе.
 
+**Режим работы: только реальные данные.** Синтетика удалена из продукта (пакет `synth` остаётся исключительно генератором тестовых фикстур); `benchmark` принимает только `--source` CSV реального объекта.
+
 **Цель MVP:** доказать на одном объекте, что система предупреждает о самосогревании
 раньше оператора и предотвращает измеримый ущерб (тонны / рубли).
 
@@ -16,7 +18,7 @@
 | 2. Физика | частично | критические кривые из CGC + ASABE D535 с источниками ([docs/sources.md](docs/sources.md)) ✓; recall **0.81** (нужно ≥0.9), lead 141 ч ✓, FP 0.24 ✓; нет тестов энергобаланса |
 | 3. ML | частично | ROC-AUC 0.94 ✓, lead 206 ч ✓, прогон 2 мин ✓, тест на утечку ✓; **precision≥0.7→recall=0 ✗**; порог ML рассинхронизирован с новым окном детекции; регрессионный ETA нет |
 | 4. Бенчмарк | частично | раньше оператора **100 %** ✓, медианное опережение 141 ч ✓, FP 0.24 ✓; **графика 5+ инцидентов нет** |
-| 5. Адаптер | готово | валидатор + маппинг каналов ✓; демо одной командой `benchmark --source` ✓ (`configs/pilot.yaml` + `pilot-sample`); `docs/data-contract.md` нет |
+| 5. Адаптер | готово | валидатор + маппинг каналов ✓; демо одной командой `benchmark --source` ✓ (`configs/pilot.yaml`); `docs/data-contract.md` нет |
 | 6. Экономика | частично | отчёт+чувствительность+допущения ✓; **`economics --config` не пишет отчёт, нет `configs/economics.yaml`** |
 | 7. Пилот | — | организационный, вне кода; открытой телеметрии с инцидентами не существует (см. [docs/sources.md](docs/sources.md) п. 5) |
 | 8. Демо | частично | `demo` ✓, отчёты с датой/версией ✓; **проверка секретов в CI нет** |
@@ -28,9 +30,8 @@
 
 ```bash
 uv sync                 # + uv sync --extra service, если нужен HTTP-сервис моделей
-uv run pytest           # 18 тестов
-uv run ruff check .
-uv run grain-guard demo # end-to-end: синтетика → модели → бенчмарк → экономика → reports/
+uv run pytest           # 18 тестов (фикстуры генерируются локально, только для тестов)
+uv run grain-guard benchmark --source <csv реального объекта> --config configs/pilot.yaml
 ```
 
 Тяжёлые прогоны — на VPS через HTTP-сервис моделей: [docs/remote-api.md](docs/remote-api.md).
@@ -73,11 +74,7 @@ reports/           # benchmark.md, economics.md, feature_importance.md (гене
 ## CLI
 
 ```bash
-grain-guard synth --n 1000 --seed 42 --out data/synthetic   # синтетика
-grain-guard benchmark --n 1000 --seed 42 --out reports      # полный прогон + отчёты
-grain-guard pilot-sample --n 25 --seed 7                    # пилотная фикстура («элеваторный» CSV)
-grain-guard benchmark --source data/raw/pilot_sample.csv --config configs/pilot.yaml --out reports/pilot
-grain-guard ingest --source data/raw/pilot_sample.csv --config configs/pilot.yaml --out data/processed/pilot_clean.csv
-grain-guard demo                                            # end-to-end демо
+grain-guard benchmark --source data/raw/<объект>.csv --config configs/pilot.yaml --out reports
+grain-guard ingest --source data/raw/<объект>.csv --config configs/pilot.yaml --out data/processed/clean.csv
 grain-guard serve --host 127.0.0.1 --port 8000              # HTTP-сервис моделей (VPS)
 ```

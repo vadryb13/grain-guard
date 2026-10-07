@@ -1,4 +1,8 @@
-"""Смоук-тест end-to-end конвейера и фабрики бэкендов."""
+"""Смоук-тест конвейера и фабрики бэкендов.
+
+Пакет synth используется ТОЛЬКО как генератор тестовых фикстур;
+в продукте (CLI/pipeline) синтетических данных больше нет.
+"""
 
 from __future__ import annotations
 
@@ -6,6 +10,11 @@ import pandas as pd
 
 from grain_guard.models import get_backend
 from grain_guard.pipeline import run
+from grain_guard.synth.generator import SynthConfig, generate
+
+
+def _fixture(n: int = 12, seed: int = 42) -> pd.DataFrame:
+    return generate(SynthConfig(n_silos=n, seed=seed))
 
 
 def test_backend_default_is_local() -> None:
@@ -17,7 +26,7 @@ def test_backend_default_is_local() -> None:
 
 
 def test_pipeline_smoke() -> None:
-    result = run(n_silos=12, seed=42, write_reports=False)
+    result = run(df=_fixture(), write_reports=False)
     assert not result.benchmark.empty
     systems = set(result.benchmark["system"])
     assert "physics" in systems
@@ -26,9 +35,8 @@ def test_pipeline_smoke() -> None:
 
 def test_pipeline_on_real_data_without_labels() -> None:
     """Этап 5: прогон на ingested-данных без разметки — физика работает, ML пропущен."""
-    from grain_guard.synth.generator import SynthConfig, generate
 
-    df = generate(SynthConfig(n_silos=8, seed=5))
+    df = _fixture(n=8, seed=5)
     df.loc[df["incident"] == 1, ["incident", "incident_start", "operator_detect"]] = (
         0,
         pd.NaT,

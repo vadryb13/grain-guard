@@ -9,79 +9,31 @@ from pathlib import Path
 from grain_guard import __version__
 from grain_guard.adapters.ingest import ingest_csv, load_config
 from grain_guard.pipeline import run as run_pipeline
-from grain_guard.synth.generator import SynthConfig, generate, validate
-
-# «Элеваторные» имена колонок для экспорта пилотной фикстуры (см. configs/pilot.yaml).
-PILOT_EXPORT_NAMES = {
-    "silo_id": "nomer_silosa",
-    "timestamp": "vremya",
-    "T_air": "T_vozduha",
-    "W_moisture": "W_vlazhnost",
-    "grain_type": "tip_zerna",
-    "incident": "flag_incidenta",
-    "incident_start": "nachalo_incidenta",
-    "operator_detect": "obnaruzhenie_operatora",
-    **{f"T_layer_{i}": f"T_zerna_{i}" for i in range(1, 7)},
-}
-
-# Типы зерна в терминах АСУ объекта; обратный маппинг — в configs/pilot.yaml.
-PILOT_GRAIN_RU = {"wheat": "Пшеница", "barley": "Ячмень", "corn": "Кукуруза"}
-
-
-def _cmd_synth(args: argparse.Namespace) -> int:
-    df = generate(SynthConfig(n_silos=args.n, seed=args.seed))
-    validate(df)
-    out = Path(args.out)
-    out.mkdir(parents=True, exist_ok=True)
-    path = out / f"synthetic_n{args.n}_seed{args.seed}.csv"
-    df.to_csv(path, index=False)
-    print(f"Сгенерировано {len(df):,} строк, {df['silo_id'].nunique()} силосов -> {path}")
-    return 0
 
 
 def _cmd_benchmark(args: argparse.Namespace) -> int:
-    df = None
-    if args.source:
-        res = ingest_csv(args.source, args.config)
-        if not res.ok:
-            print("Данные не прошли валидацию:", file=sys.stderr)
-            for e in res.errors:
-                print(f"  - {e}", file=sys.stderr)
-            return 1
-        assert res.data is not None
-        df = res.data
+    """Прогон на реальных данных: ingest -> валидация -> физика (+ML при разметке)."""
+    if not args.source:
         print(
-            f"Ingest: ОК, {len(df):,} строк, {df['silo_id'].nunique()} силосов из {args.source}"
+            "Укажите --source <csv реального объекта> (+ --config при маппинге). "
+            "Работа без синтетических данных.",
+            file=sys.stderr,
         )
-    result = run_pipeline(
-        df=df, n_silos=args.n, seed=args.seed, out_dir=args.out, write_reports=True
-    )
+        return 2
+    res = ingest_csv(args.source, args.config)
+    if not res.ok:
+        print("Данные не прошли валидацию:", file=sys.stderr)
+        for e in res.errors:
+            print(f"  - {e}", file=sys.stderr)
+        return 1
+    assert res.data is not None
+    df = res.data
+    print(f"Ingest: ОК, {len(df):,} строк, {df['silo_id'].nunique()} силосов из {args.source}")
+    result = run_pipeline(df=df, out_dir=args.out, write_reports=True)
     print(result.benchmark.to_string(index=False))
     print()
     print(f"Чистый экономический эффект: {result.econ['net_benefit_rub']:,.0f} ₽")
     print(f"Отчёты в: {args.out}")
-    return 0
-
-
-def _cmd_pilot_sample(args: argparse.Namespace) -> int:
-    """Сгенерировать пилотный CSV в «элеваторном» формате (колонки как у АСУ)."""
-    from grain_guard.synth.generator import SynthConfig, generate
-
-    df = generate(SynthConfig(n_silos=args.n, seed=args.seed))
-    export = df.rename(columns=PILOT_EXPORT_NAMES)
-    drop = ["flag_incidenta", "nachalo_incidenta", "obnaruzhenie_operatora"]
-    if args.with_incidents:
-        drop = []
-    export = export.drop(columns=drop)
-    export["tip_zerna"] = export["tip_zerna"].map(PILOT_GRAIN_RU)
-    out = Path(args.out)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    export.to_csv(out, index=False)
-    n = export["nomer_silosa"].nunique()
-    print(f"Пилотная фикстура: {len(export):,} строк, {n} силосов -> {out}")
-    if args.with_incidents:
-        k = int(export.groupby("nomer_silosa")["flag_incidenta"].first().sum())
-        print(f"Размеченных инцидентов: {k}")
     return 0
 
 
@@ -109,16 +61,6 @@ def _cmd_economics(args: argparse.Namespace) -> int:
     cfg = economics.EconomicsConfig(**{k: v for k, v in cfg_data.items()})
     print("Экономика считается по результатам benchmark. Запустите 'grain-guard benchmark'.")
     print(cfg)
-    return 0
-
-
-def _cmd_demo(_args: argparse.Namespace) -> int:
-    out = Path("reports")
-    result = run_pipeline(n_silos=1000, seed=42, out_dir=out, write_reports=True)
-    print(result.benchmark.to_string(index=False))
-    print()
-    print(f"Net benefit: {result.econ['net_benefit_rub']:,.0f} ₽")
-    print(f"Отчёты: {out}/benchmark.md, {out}/economics.md, {out}/feature_importance.md")
     return 0
 
 
@@ -151,32 +93,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--version", action="version", version=__version__)
     sub = p.add_subparsers(dest="command", required=True)
 
-    s = sub.add_parser("synth", help="Сгенерировать синтетические данные")
-    s.add_argument("--n", type=int, default=1000)
-    s.add_argument("--seed", type=int, default=42)
-    s.add_argument("--out", default="data/synthetic")
-    s.set_defaults(func=_cmd_synth)
-
     b = sub.add_parser("benchmark", help="Полный прогон и бенчмарк vs оператор")
-    b.add_argument("--n", type=int, default=1000)
-    b.add_argument("--seed", type=int, default=42)
     b.add_argument("--out", default="reports")
     b.add_argument("--source", default=None, help="CSV реального объекта (ingest + валидация)")
     b.add_argument("--config", default=None, help="YAML с column_map для --source")
     b.set_defaults(func=_cmd_benchmark)
-
-    ps = sub.add_parser(
-        "pilot-sample", help="Сгенерировать пилотный CSV в «элеваторном» формате"
-    )
-    ps.add_argument("--n", type=int, default=25)
-    ps.add_argument("--seed", type=int, default=7)
-    ps.add_argument("--out", default="data/raw/pilot_sample.csv")
-    ps.add_argument(
-        "--with-incidents",
-        action="store_true",
-        help="оставить колонки разметки (демо с метриками)",
-    )
-    ps.set_defaults(func=_cmd_pilot_sample)
 
     i = sub.add_parser("ingest", help="Загрузить CSV реального элеватора")
     i.add_argument("--source", required=True)
@@ -187,9 +108,6 @@ def build_parser() -> argparse.ArgumentParser:
     e = sub.add_parser("economics", help="Показать/проверить параметры экономики")
     e.add_argument("--config", default=None)
     e.set_defaults(func=_cmd_economics)
-
-    d = sub.add_parser("demo", help="End-to-end демо с отчётами")
-    d.set_defaults(func=_cmd_demo)
 
     sv = sub.add_parser("serve", help="HTTP-сервис моделей (для VPS)")
     sv.add_argument("--host", default="127.0.0.1")
