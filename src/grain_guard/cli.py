@@ -6,8 +6,6 @@ import argparse
 import sys
 from pathlib import Path
 
-import pandas as pd
-
 from grain_guard import __version__
 from grain_guard.adapters.ingest import ingest_csv, load_config
 from grain_guard.pipeline import run as run_pipeline
@@ -73,6 +71,30 @@ def _cmd_demo(_args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_serve(args: argparse.Namespace) -> int:
+    try:
+        import uvicorn
+    except ImportError:
+        print("Сервер не установлен: uv sync --extra service", file=sys.stderr)
+        return 1
+
+    from grain_guard.models import get_backend
+
+    backend = get_backend()
+    if not hasattr(backend, "health"):
+        print(
+            "Внимание: GRAIN_GUARD_API_URL не задан — сервис всё равно запустится.",
+            file=sys.stderr,
+        )
+    uvicorn.run(
+        "grain_guard.models.server:create_app",
+        factory=True,
+        host=args.host,
+        port=args.port,
+    )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="grain-guard", description="Прогноз самосогревания зерна")
     p.add_argument("--version", action="version", version=__version__)
@@ -102,6 +124,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     d = sub.add_parser("demo", help="End-to-end демо с отчётами")
     d.set_defaults(func=_cmd_demo)
+
+    sv = sub.add_parser("serve", help="HTTP-сервис моделей (для VPS)")
+    sv.add_argument("--host", default="127.0.0.1")
+    sv.add_argument("--port", type=int, default=8000)
+    sv.set_defaults(func=_cmd_serve)
     return p
 
 

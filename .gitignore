@@ -20,3 +20,6 @@ data/processed/
 .idea/
 .vscode/
 .DS_Store
+
+configs/remote.yaml
+.env

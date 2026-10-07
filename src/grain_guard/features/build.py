@@ -58,7 +58,7 @@ def build_features(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series, pd.DataFr
     feat["storage_day"] = data["storage_day"].to_numpy()
     feat["tcrit"] = [
         critical_temp(g, float(w))
-        for g, w in zip(data["grain_type"], data["W_moisture"])
+        for g, w in zip(data["grain_type"], data["W_moisture"], strict=True)
     ]
 
     dummies = pd.get_dummies(data["grain_type"], prefix="grain")

@@ -100,7 +100,8 @@ def to_markdown(result: dict[str, float], sens: pd.DataFrame) -> str:
         f"| Потери при позднем обнаружении (оператор) | {result['loss_fraction_operator']:.0%} |",
         f"| Потери при раннем обнаружении (система) | {result['loss_fraction_system']:.0%} |",
         f"| Стоимость одной ложной тревоги, ₽ | {result['cost_per_false_alarm']:,.0f} |",
-        f"| Стоимость мониторинга на силос/сезон, ₽ | {result['monitoring_cost_per_silo_season']:,.0f} |",
+        f"| Стоимость мониторинга на силос/сезон, ₽ | "
+        f"{result['monitoring_cost_per_silo_season']:,.0f} |",
         f"| Длительность сезона, мес | {result['season_months']} |",
         "",
         "## Чувствительность (net benefit, ₽)",

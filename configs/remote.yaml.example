@@ -1,0 +1,5 @@
+# Шаблон подключения к удалённому сервису моделей.
+# Скопируйте в configs/remote.yaml и подставьте свои значения.
+# Токен сюда не коммитить (см. docs/remote-api.md).
+base_url: http://127.0.0.1:8000
+# token: <из GRAIN_GUARD_API_TOKEN на VPS>

@@ -5,12 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 from grain_guard.evaluation.metrics import SystemScore, compare, score_system
 from grain_guard.features.build import build_features
-from grain_guard.models.train import ModelBundle, fit_baselines, split_by_group
+from grain_guard.models import ModelBundle, get_backend
+from grain_guard.models.train import split_by_group
 from grain_guard.physics.model import compute_alerts
 from grain_guard.reports import economics
 from grain_guard.synth.generator import SynthConfig, generate, validate
@@ -41,7 +41,7 @@ def run(
     X, y, meta = build_features(df)
 
     tr, te = split_by_group(X, y, meta, test_size=test_size, seed=seed)
-    bundles = fit_baselines(
+    bundles = get_backend().fit_baselines(
         X.iloc[tr].reset_index(drop=True),
         y.iloc[tr].reset_index(drop=True),
         X.iloc[te].reset_index(drop=True),

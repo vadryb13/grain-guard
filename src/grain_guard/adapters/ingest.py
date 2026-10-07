@@ -51,7 +51,9 @@ def validate(df: pd.DataFrame) -> list[str]:
         errors.append(f"Пропуски/нечисловые значения в слоях датчиков: {n_nan}")
     tmin, tmax = float(np.nanmin(joined.to_numpy())), float(np.nanmax(joined.to_numpy()))
     if tmin < -5 or tmax > 60:
-        errors.append(f"Температура вне физического диапазона -5..60 °C (найдено {tmin:.1f}..{tmax:.1f})")
+        errors.append(
+            f"Температура вне физического диапазона -5..60 °C (найдено {tmin:.1f}..{tmax:.1f})"
+        )
 
     w = pd.to_numeric(df["W_moisture"], errors="coerce")
     if w.isna().any():
@@ -63,11 +65,10 @@ def validate(df: pd.DataFrame) -> list[str]:
     if unknown:
         errors.append(f"Неизвестные типы зерна: {', '.join(map(str, unknown))}")
 
-    if not errors:
-        dup = df.assign(_ts=ts).groupby("silo_id")["_ts"].apply(lambda s: s.duplicated().any())
-        bad = dup[dup].index.tolist()
-        if bad:
-            errors.append(f"Дублирующиеся timestamp в силосах: {', '.join(map(str, bad[:5]))}")
+    dup = df.assign(_ts=ts).groupby("silo_id")["_ts"].apply(lambda s: s.dropna().duplicated().any())
+    bad = dup[dup].index.tolist()
+    if bad:
+        errors.append(f"Дублирующиеся timestamp в силосах: {', '.join(map(str, bad[:5]))}")
 
     return errors
 

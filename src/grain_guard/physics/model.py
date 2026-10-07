@@ -15,7 +15,10 @@ def _tcrit_series(df: pd.DataFrame) -> np.ndarray:
         for r in pairs.itertuples()
     }
     return np.array(
-        [mapping[(g, float(w))] for g, w in zip(df["grain_type"], df["W_moisture"])]
+        [
+            mapping[(g, float(w))]
+            for g, w in zip(df["grain_type"], df["W_moisture"], strict=True)
+        ]
     )
 
 

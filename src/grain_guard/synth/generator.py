@@ -10,8 +10,8 @@ import pandas as pd
 from grain_guard.config import (
     GRAIN_TYPES,
     HOURS_PER_DAY,
-    LAYERS,
     LAYER_COLUMNS,
+    LAYERS,
     SCHEMA_COLUMNS,
     W_SAFE,
     PhysicsParams,
@@ -44,7 +44,6 @@ def generate(cfg: SynthConfig | None = None) -> pd.DataFrame:
 
     n = cfg.n_silos
     max_hours = cfg.max_days * HOURS_PER_DAY
-    hours = np.arange(max_hours)
 
     days = rng.integers(cfg.min_days, cfg.max_days + 1, size=n)
     valid_len = days * HOURS_PER_DAY
