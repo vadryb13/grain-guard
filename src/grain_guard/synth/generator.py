@@ -57,10 +57,12 @@ def generate(cfg: SynthConfig | None = None) -> pd.DataFrame:
     grain_idx = rng.integers(0, len(GRAIN_TYPES), size=n)
     grain_types = np.array(GRAIN_TYPES)[grain_idx]
 
+    # Влажность привязана к безопасной границе хранения (docs/sources.md п. 1.1):
+    # инциденты — у партий выше границы, норма — у сухих.
     moisture = np.where(
         incident,
-        rng.uniform(15.5, 20.0, size=n),
-        rng.uniform(11.5, 15.0, size=n),
+        [rng.uniform(W_SAFE[gt] + 1.5, W_SAFE[gt] + 6.5) for gt in grain_types],
+        [rng.uniform(W_SAFE[gt] - 2.5, W_SAFE[gt] + 1.0) for gt in grain_types],
     )
 
     # Старт инцидента: не раньше 10-го дня и не позже len-10 дней.

@@ -48,9 +48,15 @@ def score_system(
     df: pd.DataFrame,
     alert: np.ndarray,
     name: str,
-    window_h: float = DETECTION_WINDOW_H,
+    pre_window_h: float = 72.0,
 ) -> SystemScore:
-    """Оценить систему по посигнальным тревогам (выровнены с df по строкам)."""
+    """Оценить систему по посигнальным тревогам (выровнены с df по строкам).
+
+    Детекция: тревога в окне [incident_start − pre_window_h; момент обнаружения
+    оператором либо конец траектории]. Lead time — насколько система обогнала
+    оператора (детекция до operator_detect). Инциденты, замеченные только
+    системой, учитываются в recall и operator_missed.
+    """
     data = _serialize(df).reset_index(drop=True)
     data["_alert"] = np.asarray(alert, dtype=bool)
 
@@ -63,9 +69,10 @@ def score_system(
     for row in incidents.itertuples():
         start = row.incident_start
         sub = data[data["silo_id"] == row.silo_id]
+        upper = row.operator_detect if pd.notna(row.operator_detect) else sub["timestamp"].max()
         window = sub[
-            (sub["timestamp"] >= start - pd.Timedelta(hours=window_h))
-            & (sub["timestamp"] <= start)
+            (sub["timestamp"] >= start - pd.Timedelta(hours=pre_window_h))
+            & (sub["timestamp"] <= upper)
         ]
         hits = window[window["_alert"]]
         if hits.empty:
