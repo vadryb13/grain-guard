@@ -73,12 +73,41 @@ def run(
     return result
 
 
+def _git_commit() -> str:
+    """Короткий hash коммита, если репозиторий доступен; иначе 'unknown'."""
+    import subprocess
+
+    try:
+        return (
+            subprocess.run(
+                ["git", "rev-parse", "--short", "HEAD"],
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=5,
+            ).stdout.strip()
+            or "unknown"
+        )
+    except Exception:
+        return "unknown"
+
+
 def _write_reports(result: PipelineResult, out_dir: str | Path) -> None:
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
+    from datetime import datetime, timezone
+
+    from grain_guard import __version__
+
+    header = (
+        f"Сгенерировано: {datetime.now(timezone.utc):%Y-%m-%d %H:%M UTC} | "
+        f"grain-guard {__version__} (commit: {_git_commit()})"
+    )
 
     lines = [
         "# Бенчмарк: система vs оператор",
+        "",
+        header,
         "",
         f"Синтетических силосов: {result.df['silo_id'].nunique()}",
         f"Инцидентов: {int(result.df.loc[result.df['incident'] == 1, 'silo_id'].nunique())}",
@@ -91,8 +120,10 @@ def _write_reports(result: PipelineResult, out_dir: str | Path) -> None:
         "",
     ]
     (out / "benchmark.md").write_text("\n".join(lines), encoding="utf-8")
+    econ_md = economics.to_markdown(result.econ, result.sensitivity)
     (out / "economics.md").write_text(
-        economics.to_markdown(result.econ, result.sensitivity), encoding="utf-8"
+        econ_md.replace("# Экономика: предотвращённые потери\n", "# Экономика: предотвращённые потери\n\n" + header + "\n", 1),
+        encoding="utf-8",
     )
 
     best = result.bundles["best"]
