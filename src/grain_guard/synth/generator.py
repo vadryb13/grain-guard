@@ -82,12 +82,14 @@ def generate(cfg: SynthConfig | None = None) -> pd.DataFrame:
 
     q0 = p.q0 * moist_factor
 
-    # Начальные температуры слоёв: чуть выше средней температуры воздуха.
+    # Начальные температуры слоёв: вертикальный градиент по столбу зерна
+    # (нижние слои холоднее/теплее верхних, направление случайно) + шум.
     offset = rng.uniform(2.0, 6.0, size=n)
+    grad = rng.choice([-1.0, 1.0], size=n)[:, None] * np.linspace(-1.5, 1.5, LAYERS)[None, :]
     t_layers = np.empty((n, LAYERS), dtype=np.float64)
     for i in range(n):
         base = _air_temperature(np.arange(48), phase[i], base_air[i]).mean()
-        t_layers[i] = base + offset[i] + rng.normal(0, 0.2, size=LAYERS)
+        t_layers[i] = base + offset[i] + grad[i] + rng.normal(0, 0.2, size=LAYERS)
 
     out = np.full((max_hours, n, LAYERS), np.nan, dtype=np.float32)
     air_all = np.full((max_hours, n), np.nan, dtype=np.float32)
@@ -113,11 +115,14 @@ def generate(cfg: SynthConfig | None = None) -> pd.DataFrame:
         t_layers = np.clip(t_layers, p.t_min, p.t_max)
         out[h] = t_layers.astype(np.float32)
 
+    # Дата загрузки силоса: случайный день года (TASKS 1.1: data_zagruzki).
+    load_day = rng.integers(0, 365, size=n)
+    load_ts = np.datetime64("2020-01-01T00:00") + load_day.astype("timedelta64[D]")
+    start_ts_base = load_ts.astype("datetime64[h]")
+
     incident_start = np.full(n, np.datetime64("NaT"), dtype="datetime64[h]")
     for i in np.where(incident)[0]:
-        incident_start[i] = np.datetime64("2020-01-01T00:00") + np.timedelta64(
-            int(start_hour[i]), "h"
-        )
+        incident_start[i] = start_ts_base[i] + np.timedelta64(int(start_hour[i]), "h")
 
     operator_detect = np.full(n, np.datetime64("NaT"), dtype="datetime64[h]")
     for i in range(n):
@@ -125,9 +130,7 @@ def generate(cfg: SynthConfig | None = None) -> pd.DataFrame:
         hot = seg.max(axis=1)
         over = np.where(hot >= 32.0)[0]
         if over.size:
-            operator_detect[i] = np.datetime64("2020-01-01T00:00") + np.timedelta64(
-                int(over[0]), "h"
-            )
+            operator_detect[i] = start_ts_base[i] + np.timedelta64(int(over[0]), "h")
 
     frames = []
     for i in range(n):
@@ -135,9 +138,16 @@ def generate(cfg: SynthConfig | None = None) -> pd.DataFrame:
         tt = out[:length, i, :]
         df = pd.DataFrame(tt, columns=LAYER_COLUMNS)
         df.insert(0, "storage_day", np.arange(length) // HOURS_PER_DAY)
-        df.insert(0, "timestamp", pd.date_range("2020-01-01", periods=length, freq="h"))
+        df.insert(0, "timestamp", pd.date_range(load_ts[i], periods=length, freq="h"))
         df.insert(0, "T_air", air_all[:length, i])
-        df["W_moisture"] = moisture[i]
+        # Влажность: базовый уровень + сезонный дрейф + рост в очаге после
+        # начала инцидента (TASKS 1.3), не выходя за 9..25 %.
+        hours_i = np.arange(length)
+        w = moisture[i] + 0.6 * np.sin(2 * np.pi * hours_i / 2160.0 + phase[i])
+        if incident[i]:
+            rise = np.clip((hours_i - start_hour[i]) / 24.0 * 0.08, 0.0, 1.5)
+            w = w + rise
+        df["W_moisture"] = np.clip(w, 9.5, 24.5)
         df["grain_type"] = grain_types[i]
         df["incident"] = int(incident[i])
         df["incident_start"] = incident_start[i]

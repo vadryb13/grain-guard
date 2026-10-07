@@ -74,7 +74,7 @@ def test_column_mapping_via_config(tmp_path: Path) -> None:
             "T_sl_4": [8.5, 8.6],
             "T_sl_5": [8.0, 8.1],
             "T_sl_6": [7.5, 7.6],
-            "tip": ["wheat", "wheat"],
+            "tip": ["Пшеница", "Пшеница"],
         }
     ).to_csv(p, index=False)
     cfg = tmp_path / "pilot.yaml"
@@ -85,10 +85,14 @@ def test_column_mapping_via_config(tmp_path: Path) -> None:
         "  T_vozduha: T_air\n"
         "  W: W_moisture\n"
         "  tip: grain_type\n"
-        + "".join(f"  T_sl_{i}: T_layer_{i}\n" for i in range(1, 7)),
+        + "".join(f"  T_sl_{i}: T_layer_{i}\n" for i in range(1, 7))
+        + "value_map:\n"
+        "  grain_type:\n"
+        "    Пшеница: wheat\n",
         encoding="utf-8",
     )
     res = ingest_csv(p, cfg)
     assert res.ok, res.errors
     assert res.data is not None
     assert list(res.data["silo_id"].unique()) == ["s1"]
+    assert set(res.data["grain_type"]) == {"wheat"}

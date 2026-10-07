@@ -1,6 +1,8 @@
-# Маппинг каналов реального объекта на внутреннюю схему grain-guard.
-# Демо Этапа 5: uv run grain-guard benchmark --source data/raw/pilot_sample.csv --config configs/pilot.yaml
-# Фикстура: uv run grain-guard pilot-sample --n 25 --seed 7
+# Маппинг каналов и значений реального объекта на внутреннюю схему grain-guard.
+# Демо Этапа 5:
+#   uv run grain-guard pilot-sample --n 25 --seed 7            # без разметки (режим пилота)
+#   uv run grain-guard pilot-sample --n 25 --seed 7 --with-incidents  # с разметкой (демо метрик)
+#   uv run grain-guard benchmark --source data/raw/pilot_sample.csv --config configs/pilot.yaml
 column_map:
   nomer_silosa: silo_id
   vremya: timestamp
@@ -13,3 +15,12 @@ column_map:
   T_zerna_4: T_layer_4
   T_zerna_5: T_layer_5
   T_zerna_6: T_layer_6
+  flag_incidenta: incident
+  nachalo_incidenta: incident_start
+  obnaruzhenie_operatora: operator_detect
+
+value_map:
+  grain_type:
+    Пшеница: wheat
+    Ячмень: barley
+    Кукуруза: corn

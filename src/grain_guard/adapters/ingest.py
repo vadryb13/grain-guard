@@ -74,12 +74,21 @@ def validate(df: pd.DataFrame) -> list[str]:
 
 
 def ingest_csv(path: str | Path, config_path: str | Path | None = None) -> IngestResult:
-    """Загрузить CSV, применить маппинг каналов из конфига и провалидировать."""
+    """Загрузить CSV, применить маппинг каналов и значений из конфига, провалидировать.
+
+    Конфиг (YAML):
+      column_map: {внешняя_колонка: внутренняя}
+      value_map:  {колонка: {внешнее_значение: внутреннее}}  # напр., тип зерна
+    """
     raw = pd.read_csv(path)
     cfg = load_config(config_path) if config_path else {}
     mapping = cfg.get("column_map", {})
     if mapping:
         raw = raw.rename(columns=mapping)
+
+    for col, values in (cfg.get("value_map") or {}).items():
+        if col in raw.columns:
+            raw[col] = raw[col].replace(values)
 
     errors = validate(raw)
     if errors:
@@ -87,6 +96,9 @@ def ingest_csv(path: str | Path, config_path: str | Path | None = None) -> Inges
 
     data = raw.copy()
     data["timestamp"] = pd.to_datetime(data["timestamp"])
+    for c in ("incident_start", "operator_detect"):
+        if c in data.columns:
+            data[c] = pd.to_datetime(data[c], errors="coerce")
     data = data.sort_values(["silo_id", "timestamp"]).reset_index(drop=True)
     if "storage_day" not in data.columns:
         data["storage_day"] = data.groupby("silo_id").cumcount() // 24

@@ -18,8 +18,14 @@ PILOT_EXPORT_NAMES = {
     "T_air": "T_vozduha",
     "W_moisture": "W_vlazhnost",
     "grain_type": "tip_zerna",
+    "incident": "flag_incidenta",
+    "incident_start": "nachalo_incidenta",
+    "operator_detect": "obnaruzhenie_operatora",
     **{f"T_layer_{i}": f"T_zerna_{i}" for i in range(1, 7)},
 }
+
+# Типы зерна в терминах АСУ объекта; обратный маппинг — в configs/pilot.yaml.
+PILOT_GRAIN_RU = {"wheat": "Пшеница", "barley": "Ячмень", "corn": "Кукуруза"}
 
 
 def _cmd_synth(args: argparse.Namespace) -> int:
@@ -62,14 +68,20 @@ def _cmd_pilot_sample(args: argparse.Namespace) -> int:
     from grain_guard.synth.generator import SynthConfig, generate
 
     df = generate(SynthConfig(n_silos=args.n, seed=args.seed))
-    export = df.rename(columns=PILOT_EXPORT_NAMES).drop(
-        columns=["incident", "incident_start", "operator_detect"]
-    )
+    export = df.rename(columns=PILOT_EXPORT_NAMES)
+    drop = ["flag_incidenta", "nachalo_incidenta", "obnaruzhenie_operatora"]
+    if args.with_incidents:
+        drop = []
+    export = export.drop(columns=drop)
+    export["tip_zerna"] = export["tip_zerna"].map(PILOT_GRAIN_RU)
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     export.to_csv(out, index=False)
     n = export["nomer_silosa"].nunique()
     print(f"Пилотная фикстура: {len(export):,} строк, {n} силосов -> {out}")
+    if args.with_incidents:
+        k = int(export.groupby("nomer_silosa")["flag_incidenta"].first().sum())
+        print(f"Размеченных инцидентов: {k}")
     return 0
 
 
@@ -159,6 +171,11 @@ def build_parser() -> argparse.ArgumentParser:
     ps.add_argument("--n", type=int, default=25)
     ps.add_argument("--seed", type=int, default=7)
     ps.add_argument("--out", default="data/raw/pilot_sample.csv")
+    ps.add_argument(
+        "--with-incidents",
+        action="store_true",
+        help="оставить колонки разметки (демо с метриками)",
+    )
     ps.set_defaults(func=_cmd_pilot_sample)
 
     i = sub.add_parser("ingest", help="Загрузить CSV реального элеватора")
