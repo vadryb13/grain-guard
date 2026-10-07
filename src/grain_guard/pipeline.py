@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import UTC
 from pathlib import Path
 
 import pandas as pd
@@ -95,12 +96,12 @@ def _git_commit() -> str:
 def _write_reports(result: PipelineResult, out_dir: str | Path) -> None:
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     from grain_guard import __version__
 
     header = (
-        f"Сгенерировано: {datetime.now(timezone.utc):%Y-%m-%d %H:%M UTC} | "
+        f"Сгенерировано: {datetime.now(UTC):%Y-%m-%d %H:%M UTC} | "
         f"grain-guard {__version__} (commit: {_git_commit()})"
     )
 
@@ -121,10 +122,9 @@ def _write_reports(result: PipelineResult, out_dir: str | Path) -> None:
     ]
     (out / "benchmark.md").write_text("\n".join(lines), encoding="utf-8")
     econ_md = economics.to_markdown(result.econ, result.sensitivity)
-    (out / "economics.md").write_text(
-        econ_md.replace("# Экономика: предотвращённые потери\n", "# Экономика: предотвращённые потери\n\n" + header + "\n", 1),
-        encoding="utf-8",
-    )
+    econ_title = "# Экономика: предотвращённые потери\n"
+    econ_md = econ_md.replace(econ_title, econ_title + "\n" + header + "\n", 1)
+    (out / "economics.md").write_text(econ_md, encoding="utf-8")
 
     best = result.bundles["best"]
     if best.importance is not None:
