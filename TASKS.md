@@ -137,7 +137,7 @@
 
 Критерии приёмки:
 
-- [ ] Демо одной командой: `uv run grain-guard ingest --source data/raw/pilot_sample.csv --config configs/pilot.yaml` → валидный датасет → полный прогон моделей end-to-end (частично: ingest есть, пилотной фикстуры и e2e-прогона на ней нет)
+- [x] Демо одной командой: `uv run grain-guard benchmark --source data/raw/pilot_sample.csv --config configs/pilot.yaml` → ingest + валидация + полный прогон моделей end-to-end → отчёты. Фикстура: `uv run grain-guard pilot-sample --n 25 --seed 7` (данные не коммитятся); при отсутствии разметки ML пропускается, работает физическая модель
 - [x] Валидатор на «грязной» фикстуре выдаёт человекочитаемые ошибки по каждому проблемному полю
 - [x] Смена источника данных не требует правок в `features/`, `models/`, `physics/` (только конфиг)
 

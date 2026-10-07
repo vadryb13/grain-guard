@@ -11,12 +11,12 @@
 
 | Этап | Статус | Ключевые метрики |
 |---|---|---|
-| 0. Каркас | частично | `uv sync && uv run pytest` — 17 тестов ✓, ruff ✓; **CI нет** |
+| 0. Каркас | частично | `uv sync && uv run pytest` — 18 тестов ✓, ruff ✓; **CI нет** |
 | 1. Синтетика | частично | 1000 силосов, 3 зерна, шаг 1 ч, 60–120 сут, инциденты 35 %, старты по всему сроку, T/W в норме ✓; инциденты — только у партий вне безопасной зоны CGC ✓; очаг ≥1 °C/сутки в 55 % инцидентов ✗ |
 | 2. Физика | частично | критические кривые из CGC + ASABE D535 с источниками ([docs/sources.md](docs/sources.md)) ✓; recall **0.76** (нужно ≥0.9), lead 140 ч ✓, FP 0.25 ✓; нет тестов энергобаланса |
 | 3. ML | частично | ROC-AUC 0.94 ✓, lead 206 ч ✓, прогон 2 мин ✓, тест на утечку ✓; **precision≥0.7→recall=0 ✗**; порог ML рассинхронизирован с новым окном детекции; регрессионный ETA нет |
 | 4. Бенчмарк | частично | раньше оператора **100 %** ✓, медианное опережение 140 ч ✓, FP 0.25 ✓; **графика 5+ инцидентов нет** |
-| 5. Адаптер | частично | валидатор + маппинг каналов ✓; **нет `configs/pilot.yaml` и e2e-прогона на ingested-данных** |
+| 5. Адаптер | готово | валидатор + маппинг каналов ✓; демо одной командой `benchmark --source` ✓ (`configs/pilot.yaml` + `pilot-sample`); `docs/data-contract.md` нет |
 | 6. Экономика | частично | отчёт+чувствительность+допущения ✓; **`economics --config` не пишет отчёт, нет `configs/economics.yaml`** |
 | 7. Пилот | — | организационный, вне кода; открытой телеметрии с инцидентами не существует (см. [docs/sources.md](docs/sources.md) п. 5) |
 | 8. Демо | частично | `demo` ✓, отчёты с датой/версией ✓; **проверка секретов в CI нет** |
@@ -28,7 +28,7 @@
 
 ```bash
 uv sync                 # + uv sync --extra service, если нужен HTTP-сервис моделей
-uv run pytest           # 17 тестов
+uv run pytest           # 18 тестов
 uv run ruff check .
 uv run grain-guard demo # end-to-end: синтетика → модели → бенчмарк → экономика → reports/
 ```
@@ -75,7 +75,9 @@ reports/           # benchmark.md, economics.md, feature_importance.md (гене
 ```bash
 grain-guard synth --n 1000 --seed 42 --out data/synthetic   # синтетика
 grain-guard benchmark --n 1000 --seed 42 --out reports      # полный прогон + отчёты
-grain-guard ingest --source data/raw/pilot_sample.csv --config configs/pilot.yaml
+grain-guard pilot-sample --n 25 --seed 7                    # пилотная фикстура («элеваторный» CSV)
+grain-guard benchmark --source data/raw/pilot_sample.csv --config configs/pilot.yaml --out reports/pilot
+grain-guard ingest --source data/raw/pilot_sample.csv --config configs/pilot.yaml --out data/processed/pilot_clean.csv
 grain-guard demo                                            # end-to-end демо
 grain-guard serve --host 127.0.0.1 --port 8000              # HTTP-сервис моделей (VPS)
 ```

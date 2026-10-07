@@ -11,6 +11,16 @@ from grain_guard.adapters.ingest import ingest_csv, load_config
 from grain_guard.pipeline import run as run_pipeline
 from grain_guard.synth.generator import SynthConfig, generate, validate
 
+# «Элеваторные» имена колонок для экспорта пилотной фикстуры (см. configs/pilot.yaml).
+PILOT_EXPORT_NAMES = {
+    "silo_id": "nomer_silosa",
+    "timestamp": "vremya",
+    "T_air": "T_vozduha",
+    "W_moisture": "W_vlazhnost",
+    "grain_type": "tip_zerna",
+    **{f"T_layer_{i}": f"T_zerna_{i}" for i in range(1, 7)},
+}
+
 
 def _cmd_synth(args: argparse.Namespace) -> int:
     df = generate(SynthConfig(n_silos=args.n, seed=args.seed))
@@ -24,13 +34,42 @@ def _cmd_synth(args: argparse.Namespace) -> int:
 
 
 def _cmd_benchmark(args: argparse.Namespace) -> int:
+    df = None
+    if args.source:
+        res = ingest_csv(args.source, args.config)
+        if not res.ok:
+            print("Данные не прошли валидацию:", file=sys.stderr)
+            for e in res.errors:
+                print(f"  - {e}", file=sys.stderr)
+            return 1
+        assert res.data is not None
+        df = res.data
+        print(
+            f"Ingest: ОК, {len(df):,} строк, {df['silo_id'].nunique()} силосов из {args.source}"
+        )
     result = run_pipeline(
-        n_silos=args.n, seed=args.seed, out_dir=args.out, write_reports=True
+        df=df, n_silos=args.n, seed=args.seed, out_dir=args.out, write_reports=True
     )
     print(result.benchmark.to_string(index=False))
     print()
     print(f"Чистый экономический эффект: {result.econ['net_benefit_rub']:,.0f} ₽")
     print(f"Отчёты в: {args.out}")
+    return 0
+
+
+def _cmd_pilot_sample(args: argparse.Namespace) -> int:
+    """Сгенерировать пилотный CSV в «элеваторном» формате (колонки как у АСУ)."""
+    from grain_guard.synth.generator import SynthConfig, generate
+
+    df = generate(SynthConfig(n_silos=args.n, seed=args.seed))
+    export = df.rename(columns=PILOT_EXPORT_NAMES).drop(
+        columns=["incident", "incident_start", "operator_detect"]
+    )
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    export.to_csv(out, index=False)
+    n = export["nomer_silosa"].nunique()
+    print(f"Пилотная фикстура: {len(export):,} строк, {n} силосов -> {out}")
     return 0
 
 
@@ -110,7 +149,17 @@ def build_parser() -> argparse.ArgumentParser:
     b.add_argument("--n", type=int, default=1000)
     b.add_argument("--seed", type=int, default=42)
     b.add_argument("--out", default="reports")
+    b.add_argument("--source", default=None, help="CSV реального объекта (ingest + валидация)")
+    b.add_argument("--config", default=None, help="YAML с column_map для --source")
     b.set_defaults(func=_cmd_benchmark)
+
+    ps = sub.add_parser(
+        "pilot-sample", help="Сгенерировать пилотный CSV в «элеваторном» формате"
+    )
+    ps.add_argument("--n", type=int, default=25)
+    ps.add_argument("--seed", type=int, default=7)
+    ps.add_argument("--out", default="data/raw/pilot_sample.csv")
+    ps.set_defaults(func=_cmd_pilot_sample)
 
     i = sub.add_parser("ingest", help="Загрузить CSV реального элеватора")
     i.add_argument("--source", required=True)
